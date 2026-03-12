@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/joho/godotenv"
 	tele "gopkg.in/telebot.v3"
@@ -39,10 +38,22 @@ func main() {
 	}
 	defer db.Close()
 
-	b, err := tele.NewBot(tele.Settings{
-		Token:  token,
-		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
-	})
+	publicURL := os.Getenv("WEBHOOK_URL")
+	if publicURL == "" {
+		log.Fatal("WEBHOOK_URL is required")
+	}
+
+	pref := tele.Settings{
+		Token: token,
+		Poller: &tele.Webhook{
+			Listen: ":8080",
+			Endpoint: &tele.WebhookEndpoint{
+				PublicURL: publicURL,
+			},
+		},
+	}
+
+	b, err := tele.NewBot(pref)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,6 +62,6 @@ func main() {
 	app.Register()
 	app.StartNotifications()
 
-	log.Println("bot started...")
+	log.Println("bot started with webhook...")
 	b.Start()
 }
