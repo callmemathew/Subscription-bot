@@ -7,6 +7,9 @@
 *.dll
 *.so
 *.dylib
+# db
+/*.db
+!/data/colonel.db
 
 # Test binary, built with `go test -c`
 *.test
@@ -30,3 +33,4 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+.DS_Store
