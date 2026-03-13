@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,10 +41,11 @@ func (a *App) menu() *tele.ReplyMarkup {
 	btnAdd := menu.Text("Добавить")
 	btnList := menu.Text("Список")
 	btnSoon := menu.Text("Скоро истекают")
+	btnDelete := menu.Text("Удалить")
 
 	menu.Reply(
 		menu.Row(btnAdd, btnList),
-		menu.Row(btnSoon),
+		menu.Row(btnSoon, btnDelete),
 	)
 
 	return menu
@@ -106,9 +108,13 @@ func (a *App) Register() {
 		text := strings.TrimSpace(c.Text())
 
 		switch text {
+
 		case "Добавить":
 			a.setSession(chatID, &Session{Step: "name"})
 			return c.Send("Введите имя клиента", a.backMenu())
+		case "Удалить":
+			a.setSession(chatID, &Session{Step: "delete"})
+			return a.sendDeleteList(c)
 
 		case "Список":
 			a.clearSession(chatID)
@@ -139,10 +145,38 @@ func (a *App) Register() {
 
 		case "Сегодня":
 			return a.handleTodayChoice(c)
+
 		}
 
 		return a.handleStep(c, text)
 	})
+}
+func (a *App) sendDeleteList(c tele.Context) error {
+
+	clients, err := ListClients(a.DB, "")
+	if err != nil {
+		return c.Send("Ошибка при получении списка")
+	}
+
+	if len(clients) == 0 {
+		return c.Send("Список пуст", a.menu())
+	}
+
+	var b strings.Builder
+
+	b.WriteString("Выберите номер клиента для удаления\n\n")
+
+	for i, cl := range clients {
+
+		b.WriteString(fmt.Sprintf(
+			"%d. %s — %s\n",
+			i+1,
+			cl.Name,
+			mapType(cl.Type),
+		))
+	}
+
+	return c.Send(b.String())
 }
 
 func (a *App) backMenu() *tele.ReplyMarkup {
@@ -153,12 +187,43 @@ func (a *App) backMenu() *tele.ReplyMarkup {
 }
 
 func (a *App) handleStep(c tele.Context, text string) error {
+
 	s := a.getSession(c.Chat().ID)
 	if s == nil {
 		return c.Send("Выберите действие из меню", a.menu())
 	}
 
 	switch s.Step {
+	case "delete":
+
+		num, err := strconv.Atoi(text)
+		if err != nil {
+			return c.Send("Введите номер клиента")
+		}
+
+		clients, err := ListClients(a.DB, "")
+		if err != nil {
+			return c.Send("Ошибка базы")
+		}
+
+		if num < 1 || num > len(clients) {
+			return c.Send("Неверный номер")
+		}
+
+		client := clients[num-1]
+
+		err = DeleteClient(a.DB, client.ID)
+		if err != nil {
+			return c.Send("Ошибка удаления")
+		}
+
+		a.clearSession(c.Chat().ID)
+
+		return c.Send(
+			fmt.Sprintf("Клиент %s удалён", client.Name),
+			a.menu(),
+		)
+
 	case "name":
 		s.Name = text
 		s.Step = "type"

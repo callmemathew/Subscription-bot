@@ -173,3 +173,12 @@ func dateMenu() *tele.ReplyMarkup {
 
 	return menu
 }
+func DeleteClient(db *sql.DB, id int64) error {
+
+	_, err := db.Exec(`
+		DELETE FROM clients
+		WHERE id = ?
+	`, id)
+
+	return err
+}
