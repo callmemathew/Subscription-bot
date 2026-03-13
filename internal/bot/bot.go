@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"subscription-bot/subscription-bot/internal/storage"
+	"subscription-bot/internal/storage"
 	"sync"
 	"time"
 

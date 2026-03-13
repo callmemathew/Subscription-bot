@@ -5,8 +5,8 @@ import (
 	"os"
 	"strconv"
 
-	"subscription-bot/subscription-bot/internal/bot"
-	"subscription-bot/subscription-bot/internal/storage"
+	"subscription-bot/internal/bot"
+	"subscription-bot/internal/storage"
 
 	"github.com/joho/godotenv"
 	tele "gopkg.in/telebot.v3"
