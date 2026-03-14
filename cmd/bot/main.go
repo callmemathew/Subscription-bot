@@ -32,7 +32,7 @@ func main() {
 
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = "data/colonel.db"
+		log.Fatal("DB_PATH is required")
 	}
 
 	db, err := storage.OpenDB(dbPath)

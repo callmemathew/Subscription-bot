@@ -8,8 +8,8 @@
 *.so
 *.dylib
 # db
-/*.db
-!/data/colonel.db
+*.db
+
 
 # Test binary, built with `go test -c`
 *.test
