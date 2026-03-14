@@ -26,99 +26,138 @@ Built with **Go** and **SQLite**, it helps track monthly and single subscription
 - **Telebot v3**
 - **godotenv**
 
-Add Client
+## Add Client
+
 When adding a client, the bot asks for:
 
-client name
-
-subscription type
-
-purchase date
+- **Client name**
+- **Subscription type**
+- **Purchase date**
 
 The purchase date can be:
 
-entered manually in DD.MM.YYYY format
+- entered manually in **DD.MM.YYYY** format
+- selected using the **Сегодня (Today)** button
 
-selected using the Сегодня button
+If the subscription type is **monthly**, the expiration date is automatically calculated as:
 
-If the subscription type is monthly, the expiration date is automatically calculated as:
-
+```
 purchase date + 30 days
-If the subscription type is single, the expiration date is not set.
+```
 
-Client List
-The bot can show:
+If the subscription type is **single**, the expiration date is not set.
 
-all clients
+---
 
-only monthly subscriptions
+## Client List
 
-only single subscriptions
+The bot can display:
 
-Each client card includes:
+- **All clients**
+- **Only monthly subscriptions**
+- **Only single subscriptions**
 
-name
+Each client entry includes:
 
-subscription type
+- **Name**
+- **Subscription type**
+- **Purchase date**
+- **Expiration date**
 
-purchase date
+---
 
-expiration date
+## Expiring Soon
 
-Expiring Soon
-Shows all monthly subscriptions that will expire within the next 7 days.
+Displays all **monthly subscriptions** that will expire within the next **7 days**.
 
-Delete Client
-The bot shows a numbered list of clients and asks for confirmation before deletion.
+---
 
-Extend Subscription
-Only monthly subscriptions can be extended.
+## Delete Client
 
-When extended, the bot:
+The bot shows a **numbered list of clients**.
 
-sets purchase date to today
+To delete a client:
 
-sets expiration date to today + 30 days
+1. Choose the client number
+2. Confirm the deletion
 
-resets reminder flag
+---
 
-Statistics
-The bot shows:
+## Extend Subscription
 
-total clients
+Only **monthly subscriptions** can be extended.
 
-monthly subscriptions
+When extending a subscription, the bot:
 
-single subscriptions
+- sets **purchase date** to **today**
+- sets **expiration date** to
 
-expiring soon
+```
+today + 30 days
+```
 
-expired
+- resets the reminder flag.
 
-Notifications
-The bot checks the database periodically and sends a reminder to the admin when a monthly subscription will expire in 7 days.
+---
 
-Example:
+## Statistics
 
+The bot can display:
+
+- **Total clients**
+- **Monthly subscriptions**
+- **Single subscriptions**
+- **Expiring soon**
+- **Expired**
+
+---
+
+## Notifications
+
+The bot periodically checks the database and sends a reminder to the admin when a monthly subscription will expire in **7 days**.
+
+Example message:
+
+```
 Reminder
 
 Client: Ivan
 Expires: 20.03.2026
-Environment Variables
-Create a .env file in the project root.
+```
+
+---
+
+## Environment Variables
+
+Create a `.env` file in the project root.
 
 Example:
 
+```env
 BOT_TOKEN=your_telegram_bot_token
 ADMIN_CHAT_ID=your_telegram_chat_id
-Run Locally
+```
+
+---
+
+## Run Locally
+
 Clone the repository:
 
-git clone git clone https://github.com/callmemathew/Subscription-bot.git
+```bash
+git clone https://github.com/callmemathew/Subscription-bot.git
 cd Subscription-bot
+```
+
 Install dependencies:
 
+```bash
 go mod tidy
+```
+
 Run the bot:
 
+```bash
 go run ./cmd/bot
+```
+
