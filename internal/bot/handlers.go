@@ -3,7 +3,6 @@ package bot
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"subscription-bot/internal/storage"
@@ -40,14 +39,15 @@ func (a *App) handleStep(c tele.Context, text string) error {
 			return c.Send("Ошибка продления", a.menu())
 		}
 
-		newExpire := time.Now().AddDate(0, 0, 30).Format("02.01.2006")
+		err = storage.AddPayment(a.DB, client.Name, "monthly", 50)
+		if err != nil {
+			return c.Send("Ошибка при сохранении оплаты: "+err.Error(), a.menu())
+		}
+
+		newExpire := time.Now().AddDate(0, 0, 30)
 
 		a.clearSession(c.Chat().ID)
-
-		return c.Send(
-			fmt.Sprintf("Абонемент продлён\n\nКлиент: %s\nНовая дата окончания: %s", client.Name, newExpire),
-			a.menu(),
-		)
+		return c.Send(formatExtended(client.Name, newExpire, 50), a.menu())
 
 	case "delete":
 		num, err := strconv.Atoi(text)
@@ -69,7 +69,10 @@ func (a *App) handleStep(c tele.Context, text string) error {
 		s.Name = client.Name
 		s.Step = "delete_confirm"
 
-		return c.Send(fmt.Sprintf("Удалить клиента %s?", client.Name), a.confirmDeleteMenu())
+		return c.Send(
+			fmt.Sprintf("Удалить клиента %s?", client.Name),
+			a.confirmDeleteMenu(),
+		)
 
 	case "delete_confirm":
 		if text == "Да" {
@@ -79,7 +82,7 @@ func (a *App) handleStep(c tele.Context, text string) error {
 			}
 
 			a.clearSession(c.Chat().ID)
-			return c.Send(fmt.Sprintf("Клиент %s удалён", s.Name), a.menu())
+			return c.Send(formatDeleted(s.Name), a.menu())
 		}
 
 		if text == "Нет" {
@@ -97,14 +100,125 @@ func (a *App) handleStep(c tele.Context, text string) error {
 	case "date":
 		purchaseDate, err := time.Parse("02.01.2006", text)
 		if err != nil {
-			return c.Send("Введите дату в формате ДД.ММ.ГГГГ\nНапример: 10.03.2026", a.dateMenu())
+			return c.Send(
+				"Введите дату в формате ДД.ММ.ГГГГ\nНапример: 10.03.2026",
+				a.dateMenu(),
+			)
 		}
 
-		return a.saveClient(c, s, purchaseDate)
+		s.PurchaseDate = purchaseDate
+		s.Step = "amount"
+
+		return c.Send("Выберите сумму оплаты", a.amountMenu())
+
+	case "amount":
+		if text == "Стандартная" {
+			if s.Type == "monthly" {
+				s.Amount = 50
+			} else {
+				s.Amount = 15
+			}
+
+			return a.saveClient(c, s)
+		}
+
+		if text == "Своя" {
+			s.Step = "custom_amount"
+			return c.Send("Введите сумму в леях", a.backMenu())
+		}
+
+		return c.Send("Выберите вариант", a.amountMenu())
+
+	case "custom_amount":
+		amount, err := strconv.Atoi(text)
+		if err != nil || amount <= 0 {
+			return c.Send("Введите корректную сумму (например 20)", a.backMenu())
+		}
+
+		s.Amount = amount
+		return a.saveClient(c, s)
 
 	default:
 		return c.Send("Главное меню", a.menu())
 	}
+}
+
+func (a *App) sendDeleteList(c tele.Context) error {
+	clients, err := storage.ListClients(a.DB, "")
+	if err != nil {
+		return c.Send("Ошибка при получении списка", a.menu())
+	}
+
+	if len(clients) == 0 {
+		return c.Send("Список пуст", a.menu())
+	}
+
+	var text string
+	text += "🗑 ВЫБЕРИ КЛИЕНТА ДЛЯ УДАЛЕНИЯ\n\n"
+
+	for i, cl := range clients {
+		text += fmt.Sprintf("%d. %s — %s\n", i+1, cl.Name, mapType(cl.Type))
+	}
+
+	return c.Send(text, a.backMenu())
+}
+
+func (a *App) sendExtendList(c tele.Context) error {
+	clients, err := storage.ListClients(a.DB, "monthly")
+	if err != nil {
+		return c.Send("Ошибка при получении списка", a.menu())
+	}
+
+	if len(clients) == 0 {
+		return c.Send("Нет месячных абонементов для продления", a.menu())
+	}
+
+	var text string
+	text += "🔄 ВЫБЕРИ КЛИЕНТА ДЛЯ ПРОДЛЕНИЯ\n\n"
+
+	for i, cl := range clients {
+		if cl.ExpireDate == nil {
+			continue
+		}
+
+		text += fmt.Sprintf(
+			"%d. %s — истекает %s\n",
+			i+1,
+			cl.Name,
+			cl.ExpireDate.Format("02.01.2006"),
+		)
+	}
+
+	return c.Send(text, a.backMenu())
+}
+
+func (a *App) saveClient(c tele.Context, s *Session) error {
+	err := storage.AddClient(a.DB, s.Name, s.Type, s.PurchaseDate)
+	if err != nil {
+		return c.Send("Ошибка при сохранении клиента: "+err.Error(), a.menu())
+	}
+
+	err = storage.AddPayment(a.DB, s.Name, s.Type, s.Amount)
+	if err != nil {
+		return c.Send("Ошибка при сохранении оплаты: "+err.Error(), a.menu())
+	}
+
+	var expire *time.Time
+	if s.Type == "monthly" {
+		e := s.PurchaseDate.AddDate(0, 0, 30)
+		expire = &e
+	}
+
+	msg := formatClientCreated(
+		s.Name,
+		s.Type,
+		s.PurchaseDate,
+		s.Amount,
+		expire,
+	)
+
+	a.clearSession(c.Chat().ID)
+	return c.Send(msg, a.menu())
 }
 
 func (a *App) handleTypeChoice(c tele.Context, text string) error {
@@ -133,71 +247,10 @@ func (a *App) handleTodayChoice(c tele.Context) error {
 		return c.Send("Сначала нажмите «Добавить»", a.menu())
 	}
 
-	return a.saveClient(c, s, time.Now())
-}
+	s.PurchaseDate = time.Now()
+	s.Step = "amount"
 
-func (a *App) saveClient(c tele.Context, s *Session, purchaseDate time.Time) error {
-	err := storage.AddClient(a.DB, s.Name, s.Type, purchaseDate)
-	if err != nil {
-		return c.Send("Ошибка при сохранении клиента: "+err.Error(), a.menu())
-	}
-
-	msg := fmt.Sprintf(
-		"Клиент добавлен\n\nИмя: %s\nТип: %s\nКупил: %s",
-		s.Name,
-		mapType(s.Type),
-		purchaseDate.Format("02.01.2006"),
-	)
-
-	if s.Type == "monthly" {
-		expire := purchaseDate.AddDate(0, 0, 30)
-		msg += "\nИстекает: " + expire.Format("02.01.2006")
-	} else {
-		msg += "\nИстекает: —"
-	}
-
-	a.clearSession(c.Chat().ID)
-	return c.Send(msg, a.menu())
-}
-
-func (a *App) sendDeleteList(c tele.Context) error {
-	clients, err := storage.ListClients(a.DB, "")
-	if err != nil {
-		return c.Send("Ошибка при получении списка", a.menu())
-	}
-
-	if len(clients) == 0 {
-		return c.Send("Список пуст", a.menu())
-	}
-
-	var b strings.Builder
-	b.WriteString("Выберите номер клиента для удаления\n\n")
-
-	for i, cl := range clients {
-		b.WriteString(fmt.Sprintf("%d. %s — %s\n", i+1, cl.Name, mapType(cl.Type)))
-	}
-
-	return c.Send(b.String(), a.backMenu())
-}
-
-func (a *App) sendExtendList(c tele.Context) error {
-	clients, err := storage.ListClients(a.DB, "monthly")
-	if err != nil {
-		return c.Send("Ошибка при получении списка", a.menu())
-	}
-
-	if len(clients) == 0 {
-		return c.Send("Нет месячных абонементов для продления", a.menu())
-	}
-
-	var b strings.Builder
-	b.WriteString("Выберите номер клиента для продления\n\n")
-
-	for i, cl := range clients {
-		b.WriteString(fmt.Sprintf("%d. %s — истекает %s\n", i+1, cl.Name, cl.ExpireDate.Format("02.01.2006")))
-	}
-
-	return c.Send(b.String(), a.backMenu())
+	return c.Send("Выберите сумму оплаты", a.amountMenu())
 }
 
 func (a *App) sendList(c tele.Context, filter string) error {
@@ -210,24 +263,17 @@ func (a *App) sendList(c tele.Context, filter string) error {
 		return c.Send("Список пуст", a.menu())
 	}
 
-	var b strings.Builder
-	b.WriteString("Клиенты:\n\n")
-
-	for i, cl := range clients {
-		b.WriteString(fmt.Sprintf("%d. %s\n", i+1, cl.Name))
-		b.WriteString(fmt.Sprintf("Тип: %s\n", mapType(cl.Type)))
-		b.WriteString(fmt.Sprintf("Купил: %s\n", cl.PurchaseDate.Format("02.01.2006")))
-
-		if cl.ExpireDate != nil {
-			b.WriteString(fmt.Sprintf("Истекает: %s\n", cl.ExpireDate.Format("02.01.2006")))
-		} else {
-			b.WriteString("Истекает: —\n")
-		}
-
-		b.WriteString("\n")
+	list := make([]ClientView, 0, len(clients))
+	for _, cl := range clients {
+		list = append(list, ClientView{
+			Name:         cl.Name,
+			Type:         cl.Type,
+			PurchaseDate: cl.PurchaseDate,
+			ExpireDate:   cl.ExpireDate,
+		})
 	}
 
-	return c.Send(b.String(), a.menu())
+	return c.Send(formatClientList(list), a.menu())
 }
 
 func (a *App) sendExpiringSoon(c tele.Context) error {
@@ -240,25 +286,17 @@ func (a *App) sendExpiringSoon(c tele.Context) error {
 		return c.Send("В ближайшие 7 дней ничего не истекает", a.menu())
 	}
 
-	var b strings.Builder
-	b.WriteString("Скоро истекают:\n\n")
-
+	list := make([]ClientView, 0, len(clients))
 	for _, cl := range clients {
-		if cl.ExpireDate == nil {
-			continue
-		}
-
-		days := int(cl.ExpireDate.Sub(time.Now()).Hours() / 24)
-		if days < 0 {
-			days = 0
-		}
-
-		b.WriteString(fmt.Sprintf("%s\n", cl.Name))
-		b.WriteString(fmt.Sprintf("Истекает: %s\n", cl.ExpireDate.Format("02.01.2006")))
-		b.WriteString(fmt.Sprintf("Осталось дней: %d\n\n", days))
+		list = append(list, ClientView{
+			Name:         cl.Name,
+			Type:         cl.Type,
+			PurchaseDate: cl.PurchaseDate,
+			ExpireDate:   cl.ExpireDate,
+		})
 	}
 
-	return c.Send(b.String(), a.menu())
+	return c.Send(formatExpiringSoon(list), a.menu())
 }
 
 func (a *App) sendStats(c tele.Context) error {
@@ -267,13 +305,15 @@ func (a *App) sendStats(c tele.Context) error {
 		return c.Send("Ошибка при получении статистики", a.menu())
 	}
 
-	msg := fmt.Sprintf(
-		"Статистика\n\nВсего клиентов: %d\nМесячных: %d\nРазовых: %d\nСкоро истекают: %d\nИстекли: %d",
+	msg := formatStats(
 		stats.Total,
 		stats.Monthly,
 		stats.Single,
 		stats.ExpiringSoon,
 		stats.Expired,
+		stats.TotalMoney,
+		stats.MonthlyMoney,
+		stats.SingleMoney,
 	)
 
 	return c.Send(msg, a.menu())
