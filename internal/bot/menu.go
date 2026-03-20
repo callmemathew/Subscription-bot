@@ -20,7 +20,20 @@ func (a *App) menu() *tele.ReplyMarkup {
 
 	return menu
 }
+func (a *App) amountMenu() *tele.ReplyMarkup {
+	menu := &tele.ReplyMarkup{ResizeKeyboard: true}
 
+	btnDefault := menu.Text("Стандартная")
+	btnCustom := menu.Text("Своя")
+	btnBack := menu.Text("Назад")
+
+	menu.Reply(
+		menu.Row(btnDefault, btnCustom),
+		menu.Row(btnBack),
+	)
+
+	return menu
+}
 func (a *App) typeMenu() *tele.ReplyMarkup {
 	menu := &tele.ReplyMarkup{ResizeKeyboard: true}
 

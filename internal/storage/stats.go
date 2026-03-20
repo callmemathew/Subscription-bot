@@ -8,6 +8,10 @@ type Stats struct {
 	Single       int
 	ExpiringSoon int
 	Expired      int
+
+	TotalMoney   int
+	MonthlyMoney int
+	SingleMoney  int
 }
 
 func GetStats(db *sql.DB) (Stats, error) {
@@ -46,6 +50,32 @@ func GetStats(db *sql.DB) (Stats, error) {
 		  AND expire_date IS NOT NULL
 		  AND DATE(expire_date) < DATE('now')
 	`).Scan(&s.Expired)
+	if err != nil {
+		return s, err
+	}
+
+	err = db.QueryRow(`
+		SELECT COALESCE(SUM(amount), 0)
+		FROM payments
+	`).Scan(&s.TotalMoney)
+	if err != nil {
+		return s, err
+	}
+
+	err = db.QueryRow(`
+		SELECT COALESCE(SUM(amount), 0)
+		FROM payments
+		WHERE type = 'monthly'
+	`).Scan(&s.MonthlyMoney)
+	if err != nil {
+		return s, err
+	}
+
+	err = db.QueryRow(`
+		SELECT COALESCE(SUM(amount), 0)
+		FROM payments
+		WHERE type = 'single'
+	`).Scan(&s.SingleMoney)
 	if err != nil {
 		return s, err
 	}

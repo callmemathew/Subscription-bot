@@ -3,15 +3,18 @@ package bot
 import (
 	"database/sql"
 	"sync"
+	"time"
 
 	tele "gopkg.in/telebot.v3"
 )
 
 type Session struct {
-	Step     string
-	Name     string
-	Type     string
-	ClientID int64
+	Step         string
+	Name         string
+	Type         string
+	ClientID     int64
+	PurchaseDate time.Time
+	Amount       int
 }
 
 type App struct {
