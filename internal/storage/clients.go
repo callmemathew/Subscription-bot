@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 )
 
@@ -25,8 +26,17 @@ func AddClient(db *sql.DB, name, subType string, purchaseDate time.Time) error {
 		INSERT INTO clients (name, type, purchase_date, expire_date, notified_7)
 		VALUES (?, ?, ?, ?, 0)
 	`, name, subType, purchaseDate.Format(time.RFC3339), expire)
+	if err != nil {
+		return fmt.Errorf(
+			"AddClient: insert failed (name=%s, type=%s, purchaseDate=%s): %w",
+			name,
+			subType,
+			purchaseDate.Format(time.RFC3339),
+			err,
+		)
+	}
 
-	return err
+	return nil
 }
 
 func ListClients(db *sql.DB, filter string) ([]Client, error) {
@@ -45,11 +55,16 @@ func ListClients(db *sql.DB, filter string) ([]Client, error) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ListClients: query failed (filter=%q): %w", filter, err)
 	}
 	defer rows.Close()
 
-	return scanClients(rows)
+	clients, err := scanClients(rows)
+	if err != nil {
+		return nil, fmt.Errorf("ListClients: scanClients failed (filter=%q): %w", filter, err)
+	}
+
+	return clients, nil
 }
 
 func DeleteClient(db *sql.DB, id int64) error {
@@ -57,8 +72,11 @@ func DeleteClient(db *sql.DB, id int64) error {
 		DELETE FROM clients
 		WHERE id = ?
 	`, id)
+	if err != nil {
+		return fmt.Errorf("DeleteClient: delete failed for client_id=%d: %w", id, err)
+	}
 
-	return err
+	return nil
 }
 
 func ExtendClientFromToday(db *sql.DB, id int64) error {
@@ -74,8 +92,17 @@ func ExtendClientFromToday(db *sql.DB, id int64) error {
 		expire.Format(time.RFC3339),
 		id,
 	)
+	if err != nil {
+		return fmt.Errorf(
+			"ExtendClientFromToday: update failed for client_id=%d, purchase_date=%s, expire_date=%s: %w",
+			id,
+			now.Format(time.RFC3339),
+			expire.Format(time.RFC3339),
+			err,
+		)
+	}
 
-	return err
+	return nil
 }
 
 func scanClients(rows *sql.Rows) ([]Client, error) {
@@ -96,18 +123,18 @@ func scanClients(rows *sql.Rows) ([]Client, error) {
 			&notified,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scanClients: rows.Scan failed: %w", err)
 		}
 
 		c.PurchaseDate, err = time.Parse(time.RFC3339, purchaseStr)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scanClients: purchase date parse failed (%s): %w", purchaseStr, err)
 		}
 
 		if expireStr.Valid {
 			t, err := time.Parse(time.RFC3339, expireStr.String)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("scanClients: expire date parse failed (%s): %w", expireStr.String, err)
 			}
 			c.ExpireDate = &t
 		}
@@ -116,5 +143,9 @@ func scanClients(rows *sql.Rows) ([]Client, error) {
 		clients = append(clients, c)
 	}
 
-	return clients, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("scanClients: rows iteration failed: %w", err)
+	}
+
+	return clients, nil
 }

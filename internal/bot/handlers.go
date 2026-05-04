@@ -27,7 +27,8 @@ func (a *App) handleStep(c tele.Context, text string) error {
 
 		clients, err := storage.ListClients(a.DB, "monthly")
 		if err != nil {
-			return c.Send("Ошибка базы", a.menu())
+			log.Printf("handleStep[extend]: ListClients(monthly) failed: %v", err)
+			return c.Send("⚠️ Ошибка базы данных", a.menu())
 		}
 
 		if num < 1 || num > len(clients) {
@@ -38,12 +39,14 @@ func (a *App) handleStep(c tele.Context, text string) error {
 
 		err = storage.ExtendClientFromToday(a.DB, client.ID)
 		if err != nil {
-			return c.Send("Ошибка продления", a.menu())
+			log.Printf("handleStep[extend]: ExtendClientFromToday failed for client_id=%d: %v", client.ID, err)
+			return c.Send("⚠️ Ошибка продления", a.menu())
 		}
 
 		err = storage.AddPayment(a.DB, client.Name, "monthly", 50)
 		if err != nil {
-			return c.Send("Ошибка при сохранении оплаты: "+err.Error(), a.menu())
+			log.Printf("handleStep[extend]: AddPayment failed for client=%q: %v", client.Name, err)
+			return c.Send("⚠️ Ошибка при сохранении оплаты", a.menu())
 		}
 
 		newExpire := time.Now().AddDate(0, 0, 30)
@@ -59,7 +62,8 @@ func (a *App) handleStep(c tele.Context, text string) error {
 
 		clients, err := storage.ListClients(a.DB, "")
 		if err != nil {
-			return c.Send("Ошибка базы", a.menu())
+			log.Printf("handleStep[delete]: ListClients(all) failed: %v", err)
+			return c.Send("⚠️ Ошибка базы данных", a.menu())
 		}
 
 		if num < 1 || num > len(clients) {
@@ -80,7 +84,8 @@ func (a *App) handleStep(c tele.Context, text string) error {
 		if text == "Да" {
 			err := storage.DeleteClient(a.DB, s.ClientID)
 			if err != nil {
-				return c.Send("Ошибка удаления", a.menu())
+				log.Printf("handleStep[delete_confirm]: DeleteClient failed for client_id=%d: %v", s.ClientID, err)
+				return c.Send("⚠️ Ошибка удаления", a.menu())
 			}
 
 			a.clearSession(c.Chat().ID)
@@ -148,7 +153,8 @@ func (a *App) handleStep(c tele.Context, text string) error {
 func (a *App) sendDeleteList(c tele.Context) error {
 	clients, err := storage.ListClients(a.DB, "")
 	if err != nil {
-		return c.Send("Ошибка при получении списка", a.menu())
+		log.Printf("sendDeleteList: ListClients(all) failed: %v", err)
+		return c.Send("⚠️ Ошибка при получении списка", a.menu())
 	}
 
 	if len(clients) == 0 {
@@ -168,7 +174,8 @@ func (a *App) sendDeleteList(c tele.Context) error {
 func (a *App) sendExtendList(c tele.Context) error {
 	clients, err := storage.ListClients(a.DB, "monthly")
 	if err != nil {
-		return c.Send("Ошибка при получении списка", a.menu())
+		log.Printf("sendExtendList: ListClients(monthly) failed: %v", err)
+		return c.Send("⚠️ Ошибка при получении списка", a.menu())
 	}
 
 	if len(clients) == 0 {
@@ -197,12 +204,14 @@ func (a *App) sendExtendList(c tele.Context) error {
 func (a *App) saveClient(c tele.Context, s *Session) error {
 	err := storage.AddClient(a.DB, s.Name, s.Type, s.PurchaseDate)
 	if err != nil {
-		return c.Send("Ошибка при сохранении клиента: "+err.Error(), a.menu())
+		log.Printf("saveClient: AddClient failed for name=%q type=%q: %v", s.Name, s.Type, err)
+		return c.Send("⚠️ Ошибка при сохранении клиента", a.menu())
 	}
 
 	err = storage.AddPayment(a.DB, s.Name, s.Type, s.Amount)
 	if err != nil {
-		return c.Send("Ошибка при сохранении оплаты: "+err.Error(), a.menu())
+		log.Printf("saveClient: AddPayment failed for name=%q type=%q amount=%d: %v", s.Name, s.Type, s.Amount, err)
+		return c.Send("⚠️ Ошибка при сохранении оплаты", a.menu())
 	}
 
 	var expire *time.Time
@@ -258,8 +267,8 @@ func (a *App) handleTodayChoice(c tele.Context) error {
 func (a *App) sendList(c tele.Context, filter string) error {
 	clients, err := storage.ListClients(a.DB, filter)
 	if err != nil {
-		log.Println("storage.ListClients error:", err)
-		return c.Send("Ошибка при получении списка", a.menu())
+		log.Printf("sendList: ListClients(filter=%q) failed: %v", filter, err)
+		return c.Send("⚠️ Ошибка при получении списка", a.menu())
 	}
 
 	if len(clients) == 0 {
@@ -290,7 +299,8 @@ func (a *App) sendList(c tele.Context, filter string) error {
 func (a *App) sendExpiringSoon(c tele.Context) error {
 	clients, err := storage.ExpiringSoon(a.DB)
 	if err != nil {
-		return c.Send("Ошибка при получении данных", a.menu())
+		log.Printf("sendExpiringSoon: ExpiringSoon failed: %v", err)
+		return c.Send("⚠️ Ошибка при получении данных", a.menu())
 	}
 
 	if len(clients) == 0 {
@@ -313,7 +323,8 @@ func (a *App) sendExpiringSoon(c tele.Context) error {
 func (a *App) sendStats(c tele.Context) error {
 	stats, err := storage.GetStats(a.DB)
 	if err != nil {
-		return c.Send("Ошибка при получении статистики", a.menu())
+		log.Printf("sendStats: GetStats failed: %v", err)
+		return c.Send("⚠️ Ошибка при получении статистики", a.menu())
 	}
 
 	msg := formatStats(
