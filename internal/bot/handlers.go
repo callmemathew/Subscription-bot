@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"subscription-bot/internal/storage"
@@ -167,7 +168,7 @@ func (a *App) sendDeleteList(c tele.Context) error {
 		text += fmt.Sprintf("%d. %s — %s\n", i+1, cl.Name, mapType(cl.Type))
 	}
 
-	return c.Send(text, a.backMenu())
+	return sendLongMessage(c, text, a.backMenu())
 }
 
 func (a *App) sendExtendList(c tele.Context) error {
@@ -197,7 +198,7 @@ func (a *App) sendExtendList(c tele.Context) error {
 		)
 	}
 
-	return c.Send(text, a.backMenu())
+	return sendLongMessage(c, text, a.backMenu())
 }
 
 func (a *App) saveClient(c tele.Context, s *Session) error {
@@ -284,7 +285,15 @@ func (a *App) sendList(c tele.Context, filter string) error {
 		})
 	}
 
-	return c.Send(formatClientList(list), a.menu())
+	msg := formatClientList(list)
+
+	err = sendLongMessage(c, msg, a.menu())
+	if err != nil {
+		log.Println("sendLongMessage error:", err)
+		return c.Send("Ошибка при отправке списка", a.menu())
+	}
+
+	return nil
 }
 
 func (a *App) sendExpiringSoon(c tele.Context) error {
@@ -308,7 +317,7 @@ func (a *App) sendExpiringSoon(c tele.Context) error {
 		})
 	}
 
-	return c.Send(formatExpiringSoon(list), a.menu())
+	return sendLongMessage(c, formatExpiringSoon(list), a.menu())
 }
 
 func (a *App) sendStats(c tele.Context) error {
@@ -330,4 +339,48 @@ func (a *App) sendStats(c tele.Context) error {
 	)
 
 	return c.Send(msg, a.menu())
+}
+
+func splitTelegramMessage(text string, limit int) []string {
+	lines := strings.Split(text, "\n")
+
+	var parts []string
+	var current string
+
+	for _, line := range lines {
+		next := current + line + "\n"
+
+		if len([]rune(next)) > limit {
+			if current != "" {
+				parts = append(parts, current)
+				current = ""
+			}
+		}
+
+		current += line + "\n"
+	}
+
+	if current != "" {
+		parts = append(parts, current)
+	}
+
+	return parts
+}
+
+func sendLongMessage(c tele.Context, text string, opts ...interface{}) error {
+	parts := splitTelegramMessage(text, 3900)
+
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			if err := c.Send(part, opts...); err != nil {
+				return err
+			}
+		} else {
+			if err := c.Send(part); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
